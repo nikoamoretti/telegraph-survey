@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Telegraph — Survey Results</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet" />
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'DM Sans', sans-serif; background: #0B1221; -webkit-font-smoothing: antialiased; color: #E2E8F0; }
+  #root { min-height: 100vh; }
+  button { font-family: inherit; cursor: pointer; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const { useState, useEffect, useMemo } = React;
+
+/* Telegraph brand palette — matches index.html exactly */
+const T = {
+  bg: "#0B1221",
+  bgCard: "rgba(255,255,255,0.05)",
+  bgCardHover: "rgba(255,255,255,0.08)",
+  green: "#00D26A",
+  greenDim: "rgba(0,210,106,0.12)",
+  greenBorder: "rgba(0,210,106,0.25)",
+  white: "#FFFFFF",
+  text: "#E2E8F0",
+  textDim: "#8B95A5",
+  border: "rgba(255,255,255,0.08)",
+  borderLight: "rgba(255,255,255,0.12)",
+  amber: "#F59E0B",
+  amberDim: "rgba(245,158,11,0.12)",
+  red: "#EF4444",
+  redDim: "rgba(239,68,68,0.12)"
+};
+
+/* CSAT score mapping */
+const csatScoreMap = {
+  "Very satisfied": 5,
+  "Satisfied": 4,
+  "Neutral": 3,
+  "Dissatisfied": 2,
+  "Very dissatisfied": 1
+};
+
+function csatColor(label) {
+  var s = csatScoreMap[label];
+  if (!s) return T.textDim;
+  if (s >= 4) return T.green;
+  if (s === 3) return T.amber;
+  return T.red;
+}
+
+function csatBg(label) {
+  var s = csatScoreMap[label];
+  if (!s) return "transparent";
+  if (s >= 4) return T.greenDim;
+  if (s === 3) return T.amberDim;
+  return T.redDim;
+}
+
+function contactName(c) {
+  var parts = [c.firstname, c.lastname].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "Unknown";
+}
+
+function formatDate(d) {
+  if (!d) return "—";
+  try {
+    return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch(e) { return "—"; }
+}
+
+/* Access gate */
+var ACCESS_KEY = "telegraph2026";
+
+function checkAccess() {
+  var params = new URLSearchParams(window.location.search);
+  return params.get("key") === ACCESS_KEY;
+}
+
+/* ----- Shared Styles ----- */
+var cardStyle = {
+  padding: "24px",
+  borderRadius: "16px",
+  background: T.bgCard,
+  border: "1px solid " + T.border
+};
+
+/* ----- Components ----- */
+
+function Spinner() {
+  return React.createElement("div", { style: {
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    minHeight: "100vh", gap: "20px"
+  }},
+    React.createElement("div", { style: {
+      width: "40px", height: "40px", border: "3px solid " + T.border,
+      borderTopColor: T.green, borderRadius: "50%",
+      animation: "spin 0.8s linear infinite"
+    }}),
+    React.createElement("div", { style: { fontSize: "14px", color: T.textDim } }, "Loading survey results...")
+  );
+}
+
+function AccessDenied() {
+  return React.createElement("div", { style: {
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    minHeight: "100vh", gap: "16px", padding: "24px", textAlign: "center"
+  }},
+    React.createElement("div", { style: {
+      width: "56px", height: "56px", borderRadius: "50%",
+      background: T.redDim, display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: "24px", marginBottom: "8px"
+    }}, "\u26D4"),
+    React.createElement("h1", { style: {
+      fontSize: "28px", fontWeight: 400, color: T.white,
+      fontFamily: "'Source Serif 4', serif"
+    }}, "Access Denied"),
+    React.createElement("p", { style: { fontSize: "15px", color: T.textDim, maxWidth: "400px", lineHeight: 1.6 } },
+      "This page requires a valid access key. Please check the link you were given.")
+  );
+}
+
+function ErrorScreen(props) {
+  return React.createElement("div", { style: {
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    minHeight: "100vh", gap: "16px", padding: "24px", textAlign: "center"
+  }},
+    React.createElement("div", { style: {
+      width: "56px", height: "56px", borderRadius: "50%",
+      background: T.amberDim, display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: "24px", marginBottom: "8px"
+    }}, "\u26A0"),
+    React.createElement("h1", { style: {
+      fontSize: "28px", fontWeight: 400, color: T.white,
+      fontFamily: "'Source Serif 4', serif"
+    }}, "Failed to Load"),
+    React.createElement("p", { style: { fontSize: "14px", color: T.textDim, maxWidth: "420px", lineHeight: 1.6 } },
+      props.message || "Could not fetch survey results from HubSpot."),
+    React.createElement("button", {
+      onClick: function() { window.location.reload(); },
+      style: {
+        marginTop: "8px", padding: "10px 24px", borderRadius: "50px",
+        border: "1.5px solid " + T.border, background: T.bgCard,
+        color: T.text, fontSize: "13px", fontWeight: 600
+      }
+    }, "Retry")
+  );
+}
+
+/* Summary Card */
+function SummaryCard(props) {
+  return React.createElement("div", { style: {
+    ...cardStyle, flex: "1", minWidth: "180px", textAlign: "center"
+  }},
+    React.createElement("div", { style: {
+      fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px",
+      textTransform: "uppercase", color: T.textDim, marginBottom: "8px"
+    }}, props.label),
+    React.createElement("div", { style: {
+      fontSize: "36px", fontWeight: 700, color: props.color || T.white,
+      fontFamily: "'Source Serif 4', serif", lineHeight: 1.2
+    }}, props.value),
+    props.sub && React.createElement("div", { style: {
+      fontSize: "12px", color: T.textDim, marginTop: "4px"
+    }}, props.sub)
+  );
+}
+
+/* CSAT Distribution Bar */
+function CSATDistribution(props) {
+  var contacts = props.contacts;
+  var levels = ["Very satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very dissatisfied"];
+  var counts = {};
+  levels.forEach(function(l) { counts[l] = 0; });
+  contacts.forEach(function(c) {
+    if (c.telegraph_csat && counts[c.telegraph_csat] !== undefined) {
+      counts[c.telegraph_csat]++;
+    }
+  });
+  var maxCount = Math.max.apply(null, levels.map(function(l) { return counts[l]; }));
+  if (maxCount === 0) maxCount = 1;
+
+  return React.createElement("div", { style: { ...cardStyle } },
+    React.createElement("div", { style: {
+      fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px",
+      textTransform: "uppercase", color: T.textDim, marginBottom: "20px"
+    }}, "CSAT Distribution"),
+    React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+      levels.map(function(level) {
+        var count = counts[level];
+        var pct = count / maxCount * 100;
+        var color = csatColor(level);
+        var bg = csatBg(level);
+        return React.createElement("div", { key: level, style: { display: "flex", alignItems: "center", gap: "12px" } },
+          React.createElement("div", { style: {
+            width: "140px", flexShrink: 0, fontSize: "13px", color: T.text,
+            textAlign: "right", fontWeight: 500
+          }}, level),
+          React.createElement("div", { style: {
+            flex: 1, height: "28px", borderRadius: "6px",
+            background: "rgba(255,255,255,0.03)", position: "relative", overflow: "hidden"
+          }},
+            React.createElement("div", { style: {
+              height: "100%", width: pct + "%", minWidth: count > 0 ? "2px" : "0",
+              borderRadius: "6px", background: color, opacity: 0.85,
+              transition: "width 0.6s cubic-bezier(0.22, 1, 0.36, 1)"
+            }})
+          ),
+          React.createElement("div", { style: {
+            width: "32px", flexShrink: 0, fontSize: "14px", fontWeight: 700,
+            color: color, textAlign: "left"
+          }}, count)
+        );
+      })
+    )
+  );
+}
+
+/* Feedback Comments */
+function FeedbackSection(props) {
+  var contacts = props.contacts;
+
+  var feedbackFields = [
+    { key: "telegraph_impact_feedback", label: "Operational Impact" },
+    { key: "telegraph_support_feedback", label: "Support Quality" },
+    { key: "telegraph_csat_feedback", label: "Overall Satisfaction" }
+  ];
+
+  var comments = [];
+  contacts.forEach(function(c) {
+    feedbackFields.forEach(function(f) {
+      if (c[f.key] && c[f.key].trim()) {
+        comments.push({
+          name: contactName(c),
+          email: c.email,
+          company: c.company,
+          question: f.label,
+          comment: c[f.key],
+          date: c.createdate
+        });
+      }
+    });
+  });
+
+  /* Sort most recent first */
+  comments.sort(function(a, b) {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return new Date(b.date) - new Date(a.date);
+  });
+
+  if (comments.length === 0) {
+    return React.createElement("div", { style: { ...cardStyle, textAlign: "center" } },
+      React.createElement("div", { style: {
+        fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px",
+        textTransform: "uppercase", color: T.textDim, marginBottom: "16px"
+      }}, "Feedback Comments"),
+      React.createElement("div", { style: { fontSize: "14px", color: T.textDim } }, "No written feedback yet.")
+    );
+  }
+
+  return React.createElement("div", null,
+    React.createElement("div", { style: {
+      fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px",
+      textTransform: "uppercase", color: T.textDim, marginBottom: "16px"
+    }}, "Feedback Comments (" + comments.length + ")"),
+    React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+      comments.map(function(item, i) {
+        return React.createElement("div", { key: i, style: {
+          ...cardStyle, animation: "fadeIn 0.3s ease forwards",
+          animationDelay: Math.min(i * 50, 500) + "ms", opacity: 0
+        }},
+          React.createElement("div", { style: {
+            display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+            marginBottom: "10px", flexWrap: "wrap", gap: "8px"
+          }},
+            React.createElement("div", null,
+              React.createElement("div", { style: { fontSize: "14px", fontWeight: 600, color: T.white } }, item.name),
+              React.createElement("div", { style: { fontSize: "12px", color: T.textDim } },
+                [item.email, item.company].filter(Boolean).join(" \u00B7 ")
+              )
+            ),
+            React.createElement("div", { style: {
+              padding: "4px 10px", borderRadius: "50px", background: T.greenDim,
+              border: "1px solid " + T.greenBorder, fontSize: "11px", fontWeight: 600,
+              color: T.green, whiteSpace: "nowrap"
+            }}, item.question)
+          ),
+          React.createElement("div", { style: {
+            fontSize: "14px", color: T.text, lineHeight: 1.65,
+            fontStyle: "italic", paddingLeft: "12px",
+            borderLeft: "2px solid " + T.greenBorder
+          }}, "\u201C" + item.comment + "\u201D")
+        );
+      })
+    )
+  );
+}
+
+/* Responses Table */
+function ResponsesTable(props) {
+  var contacts = props.contacts;
+
+  /* Sort most recent first */
+  var sorted = contacts.slice().sort(function(a, b) {
+    if (!a.createdate) return 1;
+    if (!b.createdate) return -1;
+    return new Date(b.createdate) - new Date(a.createdate);
+  });
+
+  var cellBase = {
+    padding: "12px 14px", fontSize: "13px", textAlign: "left",
+    borderBottom: "1px solid " + T.border, whiteSpace: "nowrap"
+  };
+
+  var thStyle = {
+    ...cellBase, fontSize: "11px", fontWeight: 700, letterSpacing: "0.5px",
+    textTransform: "uppercase", color: T.textDim, position: "sticky", top: 0,
+    background: T.bg, zIndex: 2
+  };
+
+  function truncate(s, n) {
+    if (!s) return "\u2014";
+    return s.length > n ? s.substring(0, n) + "\u2026" : s;
+  }
+
+  return React.createElement("div", null,
+    React.createElement("div", { style: {
+      fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px",
+      textTransform: "uppercase", color: T.textDim, marginBottom: "16px"
+    }}, "Individual Responses (" + sorted.length + ")"),
+    React.createElement("div", { style: {
+      borderRadius: "16px", border: "1px solid " + T.border, overflow: "hidden"
+    }},
+      React.createElement("div", { style: { overflowX: "auto" } },
+        React.createElement("table", { style: {
+          width: "100%", borderCollapse: "collapse", minWidth: "900px"
+        }},
+          React.createElement("thead", null,
+            React.createElement("tr", null,
+              React.createElement("th", { style: thStyle }, "Name"),
+              React.createElement("th", { style: thStyle }, "Email"),
+              React.createElement("th", { style: thStyle }, "Impact"),
+              React.createElement("th", { style: thStyle }, "Support"),
+              React.createElement("th", { style: thStyle }, "CSAT"),
+              React.createElement("th", { style: thStyle }, "Referral"),
+              React.createElement("th", { style: thStyle }, "G2"),
+              React.createElement("th", { style: thStyle }, "Date")
+            )
+          ),
+          React.createElement("tbody", null,
+            sorted.map(function(c, i) {
+              var csatVal = c.telegraph_csat;
+              var csatC = csatColor(csatVal);
+              var csatB = csatBg(csatVal);
+              var rowBg = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)";
+              return React.createElement("tr", { key: c.id || i, style: { background: rowBg } },
+                React.createElement("td", { style: { ...cellBase, color: T.white, fontWeight: 500 } }, contactName(c)),
+                React.createElement("td", { style: { ...cellBase, color: T.textDim } }, c.email || "\u2014"),
+                React.createElement("td", { style: { ...cellBase, color: T.text } }, truncate(c.telegraph_impact, 25)),
+                React.createElement("td", { style: { ...cellBase, color: T.text } }, truncate(c.telegraph_support, 25)),
+                React.createElement("td", { style: {
+                  ...cellBase, color: csatC, fontWeight: 600,
+                  background: csatB, borderRadius: 0
+                }}, csatVal || "\u2014"),
+                React.createElement("td", { style: {
+                  ...cellBase, color: c.telegraph_referral === "Yes" ? T.green : T.textDim, fontWeight: 500
+                }}, c.telegraph_referral || "\u2014"),
+                React.createElement("td", { style: {
+                  ...cellBase, color: c.telegraph_g2_review === "Yes" ? T.green : T.textDim, fontWeight: 500
+                }}, c.telegraph_g2_review || "\u2014"),
+                React.createElement("td", { style: { ...cellBase, color: T.textDim } }, formatDate(c.createdate))
+              );
+            })
+          )
+        )
+      )
+    )
+  );
+}
+
+/* Action Items Panel */
+function ActionItems(props) {
+  var contacts = props.contacts;
+
+  var referrals = contacts.filter(function(c) { return c.telegraph_referral === "Yes"; });
+  var g2Reviews = contacts.filter(function(c) { return c.telegraph_g2_review === "Yes"; });
+  var atRisk = contacts.filter(function(c) {
+    var score = csatScoreMap[c.telegraph_csat];
+    return score && score <= 2;
+  });
+
+  function PipelineList(listProps) {
+    if (listProps.items.length === 0) {
+      return React.createElement("div", { style: { fontSize: "13px", color: T.textDim, fontStyle: "italic" } }, "None yet");
+    }
+    return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+      listProps.items.map(function(c, i) {
+        return React.createElement("div", { key: i, style: {
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "8px 12px", borderRadius: "8px", background: "rgba(255,255,255,0.03)"
+        }},
+          React.createElement("div", null,
+            React.createElement("span", { style: { fontSize: "13px", fontWeight: 500, color: T.white } }, contactName(c)),
+            c.company && React.createElement("span", { style: { fontSize: "12px", color: T.textDim, marginLeft: "8px" } }, c.company)
+          ),
+          React.createElement("div", { style: { fontSize: "12px", color: T.textDim } }, c.email || "")
+        );
+      })
+    );
+  }
+
+  return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "20px" } },
+    React.createElement("div", { style: {
+      fontSize: "11px", fontWeight: 700, letterSpacing: "1.5px",
+      textTransform: "uppercase", color: T.textDim
+    }}, "Action Items"),
+
+    /* Referral Pipeline */
+    React.createElement("div", { style: cardStyle },
+      React.createElement("div", { style: {
+        display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px"
+      }},
+        React.createElement("div", { style: {
+          width: "28px", height: "28px", borderRadius: "8px",
+          background: T.greenDim, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "14px"
+        }}, "\u2197"),
+        React.createElement("div", { style: { fontSize: "14px", fontWeight: 600, color: T.white } }, "Referral Pipeline"),
+        React.createElement("div", { style: {
+          padding: "2px 8px", borderRadius: "50px", background: T.greenDim,
+          fontSize: "11px", fontWeight: 700, color: T.green
+        }}, referrals.length)
+      ),
+      React.createElement(PipelineList, { items: referrals })
+    ),
+
+    /* G2 Review Pipeline */
+    React.createElement("div", { style: cardStyle },
+      React.createElement("div", { style: {
+        display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px"
+      }},
+        React.createElement("div", { style: {
+          width: "28px", height: "28px", borderRadius: "8px",
+          background: T.greenDim, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "14px"
+        }}, "\u2605"),
+        React.createElement("div", { style: { fontSize: "14px", fontWeight: 600, color: T.white } }, "G2 Review Pipeline"),
+        React.createElement("div", { style: {
+          padding: "2px 8px", borderRadius: "50px", background: T.greenDim,
+          fontSize: "11px", fontWeight: 700, color: T.green
+        }}, g2Reviews.length)
+      ),
+      React.createElement(PipelineList, { items: g2Reviews })
+    ),
+
+    /* At-Risk */
+    React.createElement("div", { style: {
+      ...cardStyle,
+      borderColor: atRisk.length > 0 ? "rgba(239,68,68,0.2)" : T.border
+    }},
+      React.createElement("div", { style: {
+        display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px"
+      }},
+        React.createElement("div", { style: {
+          width: "28px", height: "28px", borderRadius: "8px",
+          background: T.redDim, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "14px"
+        }}, "\u26A0"),
+        React.createElement("div", { style: { fontSize: "14px", fontWeight: 600, color: T.white } }, "At-Risk Accounts"),
+        React.createElement("div", { style: {
+          padding: "2px 8px", borderRadius: "50px", background: T.redDim,
+          fontSize: "11px", fontWeight: 700, color: T.red
+        }}, atRisk.length)
+      ),
+      atRisk.length === 0
+        ? React.createElement("div", { style: { fontSize: "13px", color: T.textDim, fontStyle: "italic" } }, "No at-risk accounts")
+        : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+            atRisk.map(function(c, i) {
+              return React.createElement("div", { key: i, style: {
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "8px 12px", borderRadius: "8px", background: T.redDim
+              }},
+                React.createElement("div", null,
+                  React.createElement("span", { style: { fontSize: "13px", fontWeight: 500, color: T.white } }, contactName(c)),
+                  c.company && React.createElement("span", { style: { fontSize: "12px", color: T.textDim, marginLeft: "8px" } }, c.company)
+                ),
+                React.createElement("div", { style: {
+                  fontSize: "12px", fontWeight: 600, color: T.red
+                }}, c.telegraph_csat)
+              );
+            })
+          )
+    )
+  );
+}
+
+/* ----- Main Dashboard ----- */
+function Dashboard() {
+  var s = useState(null); var contacts = s[0]; var setContacts = s[1];
+  var ls = useState(true); var loading = ls[0]; var setLoading = ls[1];
+  var es = useState(null); var error = es[0]; var setError = es[1];
+
+  useEffect(function() {
+    fetch("/.netlify/functions/results")
+      .then(function(res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function(data) {
+        if (!data.success) throw new Error(data.error || "Unknown error");
+        setContacts(data.contacts);
+        setLoading(false);
+      })
+      .catch(function(err) {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return React.createElement(Spinner, null);
+  if (error) return React.createElement(ErrorScreen, { message: error });
+  if (!contacts || contacts.length === 0) {
+    return React.createElement("div", { style: {
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      minHeight: "100vh", gap: "16px", padding: "24px", textAlign: "center"
+    }},
+      React.createElement("h1", { style: {
+        fontSize: "28px", fontWeight: 400, color: T.white, fontFamily: "'Source Serif 4', serif"
+      }}, "No Responses Yet"),
+      React.createElement("p", { style: { fontSize: "14px", color: T.textDim, lineHeight: 1.6 } },
+        "Survey responses will appear here once contacts complete the survey.")
+    );
+  }
+
+  /* Compute summary stats */
+  var totalResponses = contacts.length;
+
+  var csatScores = contacts
+    .map(function(c) { return csatScoreMap[c.telegraph_csat]; })
+    .filter(function(s) { return s !== undefined; });
+  var avgCSAT = csatScores.length > 0
+    ? (csatScores.reduce(function(a, b) { return a + b; }, 0) / csatScores.length).toFixed(1)
+    : "—";
+
+  var referralYes = contacts.filter(function(c) { return c.telegraph_referral === "Yes"; }).length;
+  var referralTotal = contacts.filter(function(c) { return c.telegraph_referral === "Yes" || c.telegraph_referral === "No"; }).length;
+  var referralRate = referralTotal > 0 ? Math.round(referralYes / referralTotal * 100) : 0;
+
+  var g2Yes = contacts.filter(function(c) { return c.telegraph_g2_review === "Yes"; }).length;
+  var g2Total = contacts.filter(function(c) { return c.telegraph_g2_review === "Yes" || c.telegraph_g2_review === "No"; }).length;
+  var g2Rate = g2Total > 0 ? Math.round(g2Yes / g2Total * 100) : 0;
+
+  /* CSAT color for average */
+  var avgNum = parseFloat(avgCSAT);
+  var avgColor = T.white;
+  if (!isNaN(avgNum)) {
+    avgColor = avgNum >= 4 ? T.green : avgNum >= 3 ? T.amber : T.red;
+  }
+
+  var containerStyle = {
+    maxWidth: "1100px",
+    margin: "0 auto",
+    padding: "24px 20px 60px"
+  };
+
+  return React.createElement("div", { style: containerStyle },
+    /* Header */
+    React.createElement("div", { style: {
+      display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+      marginBottom: "36px", flexWrap: "wrap", gap: "16px"
+    }},
+      React.createElement("div", null,
+        React.createElement("div", { style: {
+          fontSize: "11px", fontWeight: 700, letterSpacing: "2.5px",
+          textTransform: "uppercase", color: T.green, marginBottom: "8px"
+        }}, "Telegraph"),
+        React.createElement("h1", { style: {
+          fontSize: "32px", fontWeight: 400, color: T.white, margin: 0,
+          fontFamily: "'Source Serif 4', serif"
+        }}, "Survey Results")
+      ),
+      React.createElement("div", { style: {
+        display: "flex", alignItems: "center", gap: "12px"
+      }},
+        React.createElement("div", { style: {
+          padding: "6px 14px", borderRadius: "50px", background: T.greenDim,
+          border: "1px solid " + T.greenBorder, fontSize: "12px", fontWeight: 600,
+          color: T.green
+        }}, "Live"),
+        React.createElement("button", {
+          onClick: function() { window.location.reload(); },
+          style: {
+            padding: "8px 16px", borderRadius: "50px", border: "1.5px solid " + T.border,
+            background: T.bgCard, color: T.text, fontSize: "12px", fontWeight: 600
+          }
+        }, "Refresh")
+      )
+    ),
+
+    /* Summary Cards */
+    React.createElement("div", { style: {
+      display: "flex", gap: "14px", marginBottom: "28px", flexWrap: "wrap"
+    }},
+      React.createElement(SummaryCard, {
+        label: "Total Responses", value: totalResponses, color: T.white
+      }),
+      React.createElement(SummaryCard, {
+        label: "Avg CSAT", value: avgCSAT, color: avgColor,
+        sub: "out of 5.0"
+      }),
+      React.createElement(SummaryCard, {
+        label: "Referral Rate", value: referralRate + "%", color: T.green,
+        sub: referralYes + " of " + referralTotal + " willing"
+      }),
+      React.createElement(SummaryCard, {
+        label: "G2 Review Rate", value: g2Rate + "%", color: T.green,
+        sub: g2Yes + " of " + g2Total + " willing"
+      })
+    ),
+
+    /* CSAT Distribution */
+    React.createElement("div", { style: { marginBottom: "28px" } },
+      React.createElement(CSATDistribution, { contacts: contacts })
+    ),
+
+    /* Two-column layout: feedback + action items */
+    React.createElement("div", { className: "feedback-grid" },
+      React.createElement(FeedbackSection, { contacts: contacts }),
+      React.createElement(ActionItems, { contacts: contacts })
+    ),
+
+    /* Responses Table */
+    React.createElement("div", { style: { marginBottom: "28px" } },
+      React.createElement(ResponsesTable, { contacts: contacts })
+    ),
+
+    /* Footer */
+    React.createElement("div", { style: {
+      textAlign: "center", padding: "24px 0", fontSize: "12px", color: T.textDim,
+      borderTop: "1px solid " + T.border
+    }}, "Telegraph Customer Survey Dashboard")
+  );
+}
+
+/* ----- App Entry ----- */
+function App() {
+  if (!checkAccess()) {
+    return React.createElement(AccessDenied, null);
+  }
+  return React.createElement(Dashboard, null);
+}
+
+ReactDOM.render(React.createElement(App, null), document.getElementById("root"));
+</script>
+
+<!-- Responsive grid + overrides -->
+<style>
+  .feedback-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 28px;
+    margin-bottom: 28px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .feedback-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+</body>
+</html>
