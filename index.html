@@ -572,23 +572,21 @@ function App() {
   const handleNext = () => {
     const next = findNext(qIdx);
     if (next >= total) {
-      // TODO: HUBSPOT SUBMISSION
-      // Replace PORTAL_ID and FORM_GUID with your HubSpot values
-      // Uncomment the block below once you have them:
-      //
-      // const portalId = "PORTAL_ID";
-      // const formGuid = "FORM_GUID";
-      // const email = new URLSearchParams(window.location.search).get("email");
-      // const fields = Object.entries(answers)
-      //   .filter(([k, v]) => v !== undefined && v !== null)
-      //   .map(([k, v]) => ({ objectTypeId: "0-1", name: "telegraph_" + k, value: v }));
-      // if (email) fields.push({ objectTypeId: "0-1", name: "email", value: email });
-      // fetch("https://api.hsforms.com/submissions/v3/integration/submit/" + portalId + "/" + formGuid, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ fields: fields, context: { pageUri: window.location.href, pageName: "Telegraph Customer Survey" } })
-      // }).catch(function(err) { console.error("HubSpot submission error:", err); });
-      //
+      var portalId = "20499924";
+      var formGuid = "9b6cefba-2e61-4185-9802-237f73a9f44e";
+      var email = new URLSearchParams(window.location.search).get("email");
+      var params = new URLSearchParams();
+      Object.entries(answers).forEach(function(e) {
+        if (e[1] !== undefined && e[1] !== null && e[1] !== "") {
+          params.append("telegraph_" + e[0], e[1]);
+        }
+      });
+      if (email) params.append("email", email);
+      fetch("https://forms.hubspot.com/uploads/form/v2/" + portalId + "/" + formGuid, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString()
+      }).catch(function(err) { console.error("HubSpot submission error:", err); });
       transition(() => setSubmitted(true));
     } else transition(() => setQIdx(next));
   };
