@@ -48,15 +48,33 @@ const QUESTIONS = [{
   text: "How has Telegraph impacted your rail logistics operations?",
   options: ["Significant, measurable improvement", "Moderate improvement", "Marginal improvement", "No noticeable change", "Too early to tell"]
 }, {
+  id: "impact_feedback",
+  type: "text",
+  text: "What\u2019s missing from your current setup?",
+  subtext: "Optional \u2014 helps our team understand where to improve.",
+  showWhen: function(a) { var v = a.impact; return v && v !== "Significant, measurable improvement" && v !== "Moderate improvement"; }
+}, {
   id: "support",
   type: "choice",
   text: "How easy is it to get what you need from our team?",
   options: ["Very easy \u2014 consistently available and proactive", "Easy \u2014 timely and reliable", "Sometimes difficult \u2014 occasional delays", "Difficult \u2014 hard to get what I need"]
 }, {
+  id: "support_feedback",
+  type: "text",
+  text: "What would make it easier to get what you need?",
+  subtext: "Optional \u2014 helps our team understand where to improve.",
+  showWhen: function(a) { var v = a.support; return v && v !== "Very easy \u2014 consistently available and proactive" && v !== "Easy \u2014 timely and reliable"; }
+}, {
   id: "csat",
   type: "choice",
   text: "Overall, how satisfied are you with Telegraph?",
   options: ["Very satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very dissatisfied"]
+}, {
+  id: "csat_feedback",
+  type: "text",
+  text: "What\u2019s one thing we could do better?",
+  subtext: "Optional \u2014 helps our team understand where to improve.",
+  showWhen: function(a) { var v = a.csat; return v && v !== "Very satisfied" && v !== "Satisfied"; }
 }, {
   id: "referral",
   type: "choice",
@@ -229,6 +247,39 @@ function ChoiceInput({
         color: sel ? T.green : T.textDim
       }
     }, String.fromCharCode(65 + i)), opt);
+  }));
+}
+function TextInput({
+  value,
+  onChange,
+  placeholder
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: "32px"
+    }
+  }, /*#__PURE__*/React.createElement("textarea", {
+    value: value || "",
+    onChange: function(e) { onChange(e.target.value); },
+    placeholder: placeholder || "Type your thoughts here\u2026",
+    rows: 4,
+    style: {
+      width: "100%",
+      minHeight: "120px",
+      padding: "16px",
+      borderRadius: "12px",
+      border: "1.5px solid " + T.border,
+      background: T.bgCard,
+      color: T.text,
+      fontSize: "14px",
+      fontFamily: "'DM Sans', sans-serif",
+      lineHeight: 1.6,
+      resize: "vertical",
+      outline: "none",
+      transition: "border-color 0.2s " + ease
+    },
+    onFocus: function(e) { e.target.style.borderColor = T.green; },
+    onBlur: function(e) { e.target.style.borderColor = T.border; }
   }));
 }
 function ContinueBtn({
@@ -477,9 +528,12 @@ function App() {
   const curQ = QUESTIONS[qIdx];
   const total = QUESTIONS.length;
   const shouldSkip = q => {
-    if (q.id === "g2") {
+    if (q.id === "g2" || q.id === "referral") {
       const csat = answers.csat;
       return csat === "Neutral" || csat === "Dissatisfied" || csat === "Very dissatisfied";
+    }
+    if (q.showWhen) {
+      return !q.showWhen(answers);
     }
     return false;
   };
@@ -511,6 +565,7 @@ function App() {
   });
   const canContinue = () => {
     if (!curQ) return false;
+    if (curQ.type === "text") return true;
     const v = answers[curQ.id];
     return v !== undefined && v !== null && v !== "";
   };
@@ -552,6 +607,7 @@ function App() {
   useEffect(() => {
     const onKey = e => {
       if (e.key === "Enter") {
+        if (curQ && curQ.type === "text") return;
         e.preventDefault();
         if (!started) {
           transition(() => setStarted(true));
@@ -802,11 +858,18 @@ function App() {
   });
   let qContent = null;
   if (curQ) {
-    qContent = /*#__PURE__*/React.createElement(ChoiceInput, {
-      options: curQ.options,
-      value: answers[curQ.id],
-      onChange: v => setVal(curQ.id, v)
-    });
+    if (curQ.type === "text") {
+      qContent = /*#__PURE__*/React.createElement(TextInput, {
+        value: answers[curQ.id],
+        onChange: function(v) { setVal(curQ.id, v); }
+      });
+    } else {
+      qContent = /*#__PURE__*/React.createElement(ChoiceInput, {
+        options: curQ.options,
+        value: answers[curQ.id],
+        onChange: v => setVal(curQ.id, v)
+      });
+    }
   }
   return /*#__PURE__*/React.createElement("div", {
     style: shell
@@ -925,8 +988,8 @@ function App() {
   }, /*#__PURE__*/React.createElement(ContinueBtn, {
     onClick: handleNext,
     disabled: !canContinue(),
-    label: isLast ? "Submit" : "Continue"
-  }), canContinue() && curQ && /*#__PURE__*/React.createElement("span", {
+    label: isLast ? "Submit" : curQ && curQ.type === "text" && !answers[curQ.id] ? "Skip" : "Continue"
+  }), canContinue() && curQ && curQ.type !== "text" && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: "11px",
       color: T.textDim
